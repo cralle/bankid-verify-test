@@ -1,19 +1,12 @@
-﻿using System.Security.Cryptography.X509Certificates;
+﻿using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace BankID.Test;
 
 internal class SSLCertExtensions
 {
-    public static bool ValidateServerCertificate(
-    object sender,
-    X509Certificate certificate,
-    X509Chain chain,
-    System.Net.Security.SslPolicyErrors sslPolicyErrors)
-    {
-
-        // Compare the server certificate with the trusted certificate
-        string trustedCert = @"-----BEGIN CERTIFICATE-----
+    private static string _trustedCert = @"-----BEGIN CERTIFICATE-----
 MIIF0DCCA7igAwIBAgIIIhYaxu4khgAwDQYJKoZIhvcNAQENBQAwbDEkMCIGA1UE
 CgwbRmluYW5zaWVsbCBJRC1UZWtuaWsgQklEIEFCMRowGAYDVQQLDBFJbmZyYXN0
 cnVjdHVyZSBDQTEoMCYGA1UEAwwfVGVzdCBCYW5rSUQgU1NMIFJvb3QgQ0EgdjEg
@@ -48,27 +41,35 @@ CCv9Xf4lv8jgdOnFfXbXuT8I4gz8uq8ElBlpbJntO6p/NY5a08E6C7FWVR+WJ5vZ
 OP2HsA==
 -----END CERTIFICATE-----";
 
-        var certificate2 = new X509Certificate2(certificate);
-        var rootTrustCertificate = new X509Certificate2(Encoding.UTF8.GetBytes(trustedCert));
+    // Inspired by: https://www.meziantou.net/custom-certificate-validation-in-dotnet.htm#dotnet-5-way-of-vali & https://github.com/ActiveLogin/ActiveLogin.Authentication/blob/main/src/ActiveLogin.Authentication.BankId.Core/Cryptography/X509CertificateChainValidator.cs#L16
+    public static bool ValidateServerCertificate(
+        HttpRequestMessage requestMessage,
+        X509Certificate2? certificate,
+        X509Chain? chain,
+        SslPolicyErrors sslPolicyErrors)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
 
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck; // You might want to check for revocation
-        chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
-        chain.ChainPolicy.ExtraStore.Add(rootTrustCertificate);
+        var hasCertificateNameMismatch = sslPolicyErrors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch);
+        var hasCertificateNotAvailable = sslPolicyErrors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable);
 
-        // Validate the entire chain
-        bool isValid = chain.Build(new X509Certificate2(certificate));
-
-        if (isValid)
+        if (hasCertificateNameMismatch || hasCertificateNotAvailable)
         {
-            foreach (X509ChainElement element in chain.ChainElements)
-            {
-                if (element.Certificate.Thumbprint == rootTrustCertificate.Thumbprint)
-                {
-                    return true;
-                }
-            }
+            return false;
         }
 
-        return false;
+        if (chain == null) return false;
+
+        var rootTrustCertificate = new X509Certificate2(Encoding.UTF8.GetBytes(_trustedCert));
+
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Clear();
+        chain.ChainPolicy.CustomTrustStore.Add(rootTrustCertificate);
+
+        bool isValid = chain.Build(certificate);
+
+        if (!isValid) return false;
+
+        return chain.ChainElements.Any(x => x.Certificate.Thumbprint == rootTrustCertificate.Thumbprint);
     }
 }

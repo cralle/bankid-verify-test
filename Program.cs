@@ -17,6 +17,7 @@ handler.ServerCertificateCustomValidationCallback = SSLCertExtensions.ValidateSe
 
 var client = new HttpClient(handler);
 
+// This is the QR-code value (expires after some seconds)
 var payload = new QrCodePayload("BANKIDF.74226FAAE3E64E70BB03F8E8E18D0439.8.79C416AA74278A70FAC25855F728A3206789B87B6FF6EB00688DB9622EFD2D33");
 
 var jsonPayload = JsonSerializer.Serialize(payload);
