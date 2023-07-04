@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  version: 1.0.0
+  title: API - Verify ID card from BankID
+  description: |
+    Protocol between Relying Party and BankID for performing verification of ID card from BankID, given holder successfully performed 'open ID card'.
+    
+    The API protocol is HTTP-based and uses JSON request/response payloads.
+
+    Relying parties authenticates with the API using mutual TLS client authentication using their relying party certificates. See section 1. for more details on API usage.
+  license:
+    name: (c) 2023 Finansiell ID-teknik BID AB
+servers:
+  - url: 'https://<path>'
+paths:
+  /verify:
+    post:
+      summary: Perform verification of ID card from BankID
+      description: |
+        See request and response description for more details.
+      operationId: verify
+      tags:
+        - RelyingParty
+      requestBody:
+        description: |
+          See request and response description for more details.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+        '400':
+          description: Errors due to bad input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        '500':
+          description: Used for unexpected errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+
+  schemas:
+    VerifyRequest:
+      type: object
+      required:
+        - qrCode
+      properties:
+        qrCode:
+          type: string
+          description: |
+            The complete content of the scanned *QR-code*.
+          example: |
+            `BANKIDF.74226FAAE3E64E70BB03F8E8E18D0439.8.79C416AA74278A70FAC25855F728A3206789B87B6FF6EB00688DB9622EFD2D33`
+
+    VerifyResponse:
+      type: object
+      description: |
+        A successful request returns authentication, verification and ID cardholder information. See each property for details.
+        Relying parties should control the ID cardholder information and continue their process. Relying parties should keep the
+        data for future references/compliance/audit.
+        
+        A failed request will return HTTP error response.
+      required:
+        - transactionType
+        - user
+        - verification
+        - authentication
+      properties:
+        transactionType:
+          type: string
+          description: |
+            Type of transaction, a fixed value of *`ID-kort-validering`*.
+        user:
+          $ref: "#/components/schemas/UserData"
+        verification:
+          $ref: "#/components/schemas/VerificationData"
+        authentication:
+          $ref: "#/components/schemas/AuthenticationData"
+
+    UserData:
+      type: object
+      description: |
+        Information related to the authenticated ID cardholder.
+      required:
+        - personalNumber
+        - name
+        - givenName
+        - surname
+        - age
+      properties:
+        personalNumber:
+          type: string
+          description: |
+            The ID number of the ID cardholder.
+            The ID number is a Swedish national identification number (12 digits).
+        name:
+          type: string
+          description: |
+            The ID cardholder's given name and surname.
+        givenName:
+          type: string
+          description: |
+            The ID cardholder's given name.
+        surname:
+          type: string
+          description: |
+            The ID cardholder's surname.
+        age:
+          type: integer
+          description: |
+            The ID cardholder's age.
+
+    AuthenticationData:
+      type: object
+      description: |
+        Information related to the BankID authentication of the ID cardholder during 'open ID card'.
+      required:
+        - identifiedAt
+        - orderRef
+        - signature
+        - ocspResponse
+      properties:
+        identifiedAt:
+          type: string
+          description: |
+            Timestamp in ISO 8601 indicating date and time in UTC when ID cardholder was identified using BankID.
+          example: 2023-01-30T11:23:14Z
+        orderRef:
+          type: string
+          description: |
+            The orderRef received during BankID authentication in 'open ID card'.
+        signature:
+          type: string
+          description: |
+            The signature received during BankID authentication in 'open ID card'. 
+            The content of the signature is described in BankID Signature Profile specification. String. Base64-encoded. XML signature.
+        ocspResponse:
+          type: string
+          description: |
+            The OCSP response received during BankID authentication in 'open ID card'. 
+
+    VerificationData:
+      type: object
+      description: |
+        Information related to the verification of the authenticated ID cardholder.
+      required:
+        - verificationId
+        - verifiedAt
+        - signature
+      properties:
+        verificationId:
+          type: string
+          description: |
+            Unique identifier for the performed verification, UUID.
+        verifiedAt:
+          type: string
+          description: |
+            Timestamp in ISO 8601 indicating date and time in UTC when the verification of the ID card was performed.
+          example: 2023-01-30T11:23:14Z
+        signature:
+          type: string
+          description: |
+            Base64-encoded enveloping XAdES signature conforming to ETSI TS 103 171 v2.1.1 Baseline Profile B-B. See section 5 for detailed information about the contents of the signature.
+
+    Error:
+      type: object
+      description: Error to take action on.
+      required:
+        - errorCode
+      properties:
+        errorCode:
+          type: string
+          description: Error code to help relying parties to take correct action.
+        details:
+          type: string
+          description: An optional description of something related to the error.
